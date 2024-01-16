@@ -27,7 +27,9 @@
 #include <stack>
 #include <iostream>
 #include <algorithm>
-#include <random>    // Add this line to include the <random> header
+#include <random>
+#include <chrono>
+#include <thread>
 
 const int screenWidth = 800;
 const int screenHeight = 600;
@@ -41,36 +43,105 @@ struct Cell {
     Cell(int x, int y) : x(x), y(y) {}
 };
 
+enum class MazeState {
+    Idle,
+    Generating,
+    Done
+};
+
 std::vector<std::vector<bool>> maze(mazeHeight, std::vector<bool>(mazeWidth, true));
 
-void generateMaze(int startX, int startY) {
-    std::stack<Cell> stack;
-    stack.push(Cell(startX, startY));
-    maze[startY][startX] = false;
-
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-
-    while (!stack.empty()) {
-        int x = stack.top().x;
-        int y = stack.top().y;
-        stack.pop();
-
-        int directions[4][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
-        std::shuffle(std::begin(directions), std::end(directions), eng);
-
-        for (const auto& dir : directions) {
-            int nx = x + 2 * dir[0];
-            int ny = y + 2 * dir[1];
-
-            if (nx >= 0 && nx < mazeWidth && ny >= 0 && ny < mazeHeight && maze[ny][nx]) {
-                maze[ny][nx] = false;
-                maze[y + dir[1]][x + dir[0]] = false;
-                stack.push(Cell(nx, ny));
+void drawMaze() {
+    for (int y = 0; y < mazeHeight; ++y) {
+        for (int x = 0; x < mazeWidth; ++x) {
+            if (maze[y][x]) {
+                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, DARKGRAY);
+            }
+            else {
+                DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, RAYWHITE);
             }
         }
     }
 }
+
+bool generateMazeStepByStep(int startX, int startY, MazeState& state) {
+    static std::stack<Cell> stack;
+    static std::random_device rd;
+    static std::default_random_engine eng(rd());
+
+    // Define directions here
+    int directions[4][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
+
+    switch (state) {
+    case MazeState::Idle:
+        // Start the maze generation
+        stack.push(Cell(startX, startY));
+        maze[startY][startX] = false;
+        state = MazeState::Generating;
+        break;
+
+    case MazeState::Generating:
+        if (!stack.empty()) {
+            int x = stack.top().x;
+            int y = stack.top().y;
+
+            // Check if there are unvisited neighbors
+            bool found = false;
+            for (int i = 0; i < 4; ++i) {
+                int nx = x + 2 * directions[i][0];
+                int ny = y + 2 * directions[i][1];
+
+                if (nx >= 0 && nx < mazeWidth && ny >= 0 && ny < mazeHeight && maze[ny][nx]) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found) {
+                // There are unvisited neighbors, proceed with generating
+                std::shuffle(std::begin(directions), std::end(directions), eng);
+
+                for (const auto& dir : directions) {
+                    int nx = x + 2 * dir[0];
+                    int ny = y + 2 * dir[1];
+
+                    if (nx >= 0 && nx < mazeWidth && ny >= 0 && ny < mazeHeight && maze[ny][nx]) {
+                        maze[ny][nx] = false;
+                        maze[y + dir[1]][x + dir[0]] = false;
+
+                        // Draw the updated maze
+                        drawMaze();
+                        DrawRectangle(nx * cellSize, ny * cellSize, cellSize, cellSize, GREEN);
+                        DrawRectangle((x + dir[0]) * cellSize, (y + dir[1]) * cellSize, cellSize, cellSize, GREEN);
+
+                        // Delay to visualize the generation process
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+                        stack.push(Cell(nx, ny));
+                        return true;  // Continue generating
+                    }
+                }
+            }
+            else {
+                // No unvisited neighbors, backtrack
+                stack.pop();
+            }
+        }
+        else {
+            // Maze generation is complete
+            state = MazeState::Done;
+            return false;
+        }
+        break;
+
+    case MazeState::Done:
+        // Maze is already generated
+        return false;
+    }
+
+    return false;
+}
+
 //------------------------------------------------------------------------------------
 // Program main entry point
 //------------------------------------------------------------------------------------
@@ -78,40 +149,29 @@ int main(void)
 {    
     // Initialization
     //--------------------------------------------------------------------------------------
-
     InitWindow(screenWidth, screenHeight, "maze");
-
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
-    InitAudioDevice();
 
-    generateMaze(0, 0);
-
-
+    MazeState state = MazeState::Idle;
     // Main game loop
     while (!WindowShouldClose())    // Detect window close button or ESC key
     {
         // Update
-        //----------------------------------------------------------------------------------
-        // TODO: Update your variables here
-        //----------------------------------------------------------------------------------
-
+ 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
 
         ClearBackground(BLACK);
 
-        for (int y = 0; y < mazeHeight; ++y) {
-            for (int x = 0; x < mazeWidth; ++x) {
-                if (maze[y][x]) {
-                    DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, DARKGRAY);
-                }
-                else {
-                    DrawRectangle(x * cellSize, y * cellSize, cellSize, cellSize, RAYWHITE);
-                }
-            }
+        if (generateMazeStepByStep(0, 0, state)) {
+            // Continue generating while true
+            EndDrawing();
+            continue;
         }
+
+        drawMaze();
 
         EndDrawing();
         //----------------------------------------------------------------------------------
