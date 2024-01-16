@@ -28,8 +28,6 @@
 #include <iostream>
 #include <algorithm>
 #include <random>
-#include <chrono>
-#include <thread>
 
 const int screenWidth = 800;
 const int screenHeight = 600;
@@ -69,7 +67,6 @@ bool generateMazeStepByStep(int startX, int startY, MazeState& state) {
     static std::random_device rd;
     static std::default_random_engine eng(rd());
 
-    // Define directions here
     int directions[4][2] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
 
     switch (state) {
@@ -85,7 +82,6 @@ bool generateMazeStepByStep(int startX, int startY, MazeState& state) {
             int x = stack.top().x;
             int y = stack.top().y;
 
-            // Check if there are unvisited neighbors
             bool found = false;
             for (int i = 0; i < 4; ++i) {
                 int nx = x + 2 * directions[i][0];
@@ -98,7 +94,6 @@ bool generateMazeStepByStep(int startX, int startY, MazeState& state) {
             }
 
             if (found) {
-                // There are unvisited neighbors, proceed with generating
                 std::shuffle(std::begin(directions), std::end(directions), eng);
 
                 for (const auto& dir : directions) {
@@ -109,33 +104,26 @@ bool generateMazeStepByStep(int startX, int startY, MazeState& state) {
                         maze[ny][nx] = false;
                         maze[y + dir[1]][x + dir[0]] = false;
 
-                        // Draw the updated maze
                         drawMaze();
                         DrawRectangle(nx * cellSize, ny * cellSize, cellSize, cellSize, GREEN);
                         DrawRectangle((x + dir[0]) * cellSize, (y + dir[1]) * cellSize, cellSize, cellSize, GREEN);
 
-                        // Delay to visualize the generation process
-                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
                         stack.push(Cell(nx, ny));
-                        return true;  // Continue generating
+                        return true;
                     }
                 }
             }
             else {
-                // No unvisited neighbors, backtrack
                 stack.pop();
             }
         }
         else {
-            // Maze generation is complete
             state = MazeState::Done;
             return false;
         }
         break;
 
     case MazeState::Done:
-        // Maze is already generated
         return false;
     }
 
@@ -152,7 +140,8 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "maze");
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
-
+    double lastTime = GetTime();
+    double delay = 0.05;
     MazeState state = MazeState::Idle;
     // Main game loop
     while (!WindowShouldClose())    // Detect window close button or ESC key
@@ -165,10 +154,10 @@ int main(void)
 
         ClearBackground(BLACK);
 
-        if (generateMazeStepByStep(0, 0, state)) {
-            // Continue generating while true
-            EndDrawing();
-            continue;
+        double currentTime = GetTime();
+        if ((currentTime - lastTime) >= delay && generateMazeStepByStep(0, 0, state)) {
+            // Continue generating while true and the elapsed time is greater than or equal to the delay
+            lastTime = currentTime;
         }
 
         drawMaze();
